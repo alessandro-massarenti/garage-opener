@@ -1,13 +1,14 @@
 //Compiler instructions
-#define relay_board_size = 4
+#define relay_board_size 4
 #define RELAY_ON LOW
 #define RELAY_OFF HIGH
 
 #include <UIPEthernet.h> // Used for Ethernet
+#include "functions.h"
 
 // **** ETHERNET SETTING ****
 byte mac[] = {0x90, 0xA2, 0xDA, 0x0D, 0x78, 0xEE};
-IPAddress ip(192, 168, 71, 55);
+IPAddress ip(192, 168, 51, 55);
 
 String readString;
 
@@ -20,7 +21,7 @@ void setup()
     for (int i = 0; i < relay_board_size; i++)
     {
         pinMode(relay[i], OUTPUT);
-        digitalWrite(ledPin, RELAY_OFF);
+        digitalWrite(relay[i], RELAY_OFF);
     }
 
     // start the Ethernet connection and the server:
@@ -56,9 +57,23 @@ void loop()
                     client.stop();
 
                     // control arduino pin
-                    if (readString.indexOf("?open") > -1)
+                    if (readString.indexOf("?opengate") > -1)
                     {
-                       pulse_relay();
+                        pulse_relay(relay[0]);
+                    }
+                    else if (readString.indexOf("?opendoor") > -1)
+                    {
+                        pulse_relay(relay[1]);
+                    }
+                    //clearing string for next read
+                    else if (readString.indexOf("?open3") > -1)
+                    {
+                        pulse_relay(relay[2]);
+                    }
+                    //clearing string for next read
+                    else if (readString.indexOf("?open4") > -1)
+                    {
+                        pulse_relay(relay[3]);
                     }
                     //clearing string for next read
                     readString = "";

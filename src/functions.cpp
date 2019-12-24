@@ -1,4 +1,7 @@
-#include functions.h
+#define RELAY_ON LOW
+#define RELAY_OFF HIGH
+
+#include "functions.h"
 
 void pulse_relay(int relay)
 {
