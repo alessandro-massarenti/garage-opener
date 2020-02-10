@@ -8,7 +8,6 @@
 
 // **** ETHERNET SETTING ****
 byte mac[] = {0x90, 0xA2, 0xDA, 0x0D, 0x78, 0xEE};
-IPAddress ip(192, 168, 51, 55);
 
 String readString;
 
