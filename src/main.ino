@@ -1,191 +1,73 @@
-//Compiler instructions
-#define relay_board_size 4
-#define RELAY_ON LOW
-#define RELAY_OFF HIGH
-#define CHIAVE 97
+/*
+ Publishing in the callback
+  - connects to an MQTT server
+  - subscribes to the topic "inTopic"
+  - when a message is received, republishes it to "outTopic"
+  This example shows how to control pins using Ethernet shield via MQTT
+*/
 
-#include <LiquidCrystal_I2C.h>
-#include <UIPEthernet.h> // Used for Ethernet
+#include <SPI.h>
+#include <UIPEthernet.h>
+#include <PubSubClient.h>
 
-// **** ETHERNET SETTING ****
-byte mac[] = {0x00, 0xA2, 0xDA, 0x0D, 0x78, 0xEE};
-EthernetServer server(80);
-//lcd
-int relay[relay_board_size] = {2, 3, 4, 5};
-LiquidCrystal_I2C lcd(0x27, 20, 4);
+// Update these with values suitable for your network.
+byte mac[]    = {  0xDE, 0xED, 0xBA, 0xFE, 0xFE, 0xED };
+IPAddress server(192, 168, 51, 117);
 
-//variable
-String readString;
-int prime = 0;
-int base = 0;
+const int lightPin = 2;
+
+// Callback function header
+void callback(char* topic, byte* payload, unsigned int length);
+
+EthernetClient ethClient;
+PubSubClient client(server, 1883, callback, ethClient);
+
+// Callback function
+void callback(char* topic, byte* payload, unsigned int length) {
+    
+  //turn the LED ON if the payload is '1' and publish to the MQTT server a confirmation message
+  if(payload[0] == '2'){
+    pulserelay();
+    client.publish("outTopic", "Light On"); }
+    
+   if(payload[0] == '1'){
+    digitalWrite(lightPin, HIGH);
+    client.publish("outTopic", "Light On"); }
+    
+  //turn the LED OFF if the payload is '0' and publish to the MQTT server a confirmation message
+  if (payload[0] == '0'){
+    digitalWrite(lightPin, LOW);
+    client.publish("outTopic", "Light Off");
+    }
+} // void callback
+
 
 void setup()
 {
+  pinMode(lightPin, OUTPUT);
+  digitalWrite(lightPin, HIGH);
+  Serial.begin(9600);
+  Serial.println("prova");
 
-    reset_relay();
+  
+  Ethernet.begin(mac);
 
-    Serial.begin(9600);
-
-    // start the Ethernet connection and the server:
-    Ethernet.begin(mac);
-    server.begin();
-
-    lcd.init();
-    lcd.backlight();
-
-    show_info();
+  Serial.print(Ethernet.localIP());
+  
+  if (client.connect("alessandro")) {
+    Serial.println("connesso");
+    client.publish("outTopic","hello world");
+    client.subscribe("/test/inTopic");
+  }
 }
 
 void loop()
 {
-
-    // Create a client connection
-    EthernetClient client = server.available();
-    if (client)
-    {
-        while (client.connected())
-        {
-            if (client.available())
-            {
-                char c = client.read();
-
-                //read char by char HTTP request
-                if (readString.length() < 100)
-                {
-                    //store characters to string
-                    readString += c;
-                }
-
-                //if HTTP request has ended– 0x0D is Carriage Return \n ASCII
-                if (c == 0x0D)
-                {
-                    client.println("HTTP/1.1 200 OK"); //send new page
-                    delay(10);
-                    //stopping client
-                    client.stop();
-
-                    if (readString.indexOf("prime=") > -1 && readString.indexOf("base=") > -1)
-                    {
-                        prime = readString.substring(readString.indexOf("prime=") + 5, readString.indexOf("&")).toInt();
-                        base = readString.substring(readString.indexOf("base=") + 5, readString.indexOf("&", readString.indexOf("base="))).toInt();
-
-                        Serial.println(prime);
-                        Serial.println(base);
-                        Serial.println(pubkey(prime, base));
-                    }
-
-                    lcd.setCursor(0, 3);
-                    //clearing string for next read
-                    readString = "";
-                }
-            }
-        }
-    }
-
-    delay(100);
+  client.loop();
 }
 
-String pad(String str, int size)
-{
-    int strsize = str.length();
-    size = size - strsize;
-    for (int i = 0; i < size; i++)
-    {
-        str += " ";
-    }
-    return str;
+void pulserelay(){
+    digitalWrite(lightPin, LOW);
+    delay(250);
+    digitalWrite(lightPin, HIGH);
 }
-
-char *XORENC(char *in, char *key)
-{
-    // Brad @ pingturtle.com
-    int insize = strlen(in);
-    int keysize = strlen(key);
-    for (int x = 0; x < insize; x++)
-    {
-        for (int i = 0; i < keysize; i++)
-        {
-            in[x] = (in[x] ^ key[i]) ^ (x * i);
-        }
-    }
-    return in;
-}
-
-void pulse_relay(int relay)
-{
-    digitalWrite(relay, RELAY_ON);
-    delay(500);
-    digitalWrite(relay, RELAY_OFF);
-}
-
-int pubkey(int prime, int base)
-{
-    return (CHIAVE * base) % prime;
-}
-
-int sharekey(int prime, int base, int chiave)
-{
-    return (chiave * CHIAVE) % prime;
-}
-
-void reset_relay()
-{
-    //Reset relays
-    for (int i = 0; i < relay_board_size; i++)
-    {
-        pinMode(relay[i], OUTPUT);
-        digitalWrite(relay[i], RELAY_OFF);
-    }
-    for (int i = 0; i < relay_board_size; i++)
-    {
-        pulse_relay(relay[i]);
-    }
-}
-
-void show_info()
-{
-    lcd.setCursor(0, 0);
-    lcd.print("IP: ");
-    lcd.print(Ethernet.localIP());
-    lcd.setCursor(0, 1);
-    lcd.print("Mask: ");
-    lcd.print(Ethernet.subnetMask());
-    lcd.setCursor(0, 2);
-    lcd.print("GwIP:");
-    lcd.print(Ethernet.gatewayIP());
-    lcd.setCursor(0, 3);
-}
-
-/*
-
-// control arduino pin
-                    if (readString.indexOf("?opengate") > -1)
-                    {
-                        pulse_relay(relay[0]);
-                    }
-                    else if (readString.indexOf("?opendoor") > -1)
-                    {
-                        pulse_relay(relay[1]);
-                    }
-                    else if (readString.indexOf("?open3") > -1)
-                    {
-                        pulse_relay(relay[2]);
-                    }
-                    else if (readString.indexOf("?open4") > -1)
-                    {
-                        pulse_relay(relay[3]);
-                    }
-
-                    else if (readString.indexOf("?key") > -1)
-                    {
-                        readString = readString.substring(readString.indexOf("?key") + 5, readString.indexOf("end"));
-                        char caratteri[20];
-                        readString.toCharArray(caratteri, 20);
-
-                        char *roba = XORENC(caratteri, "52546");
-
-                        lcd.print(pad(roba, 20));
-                        Serial.println(roba);
-                    }
-
-                    */
