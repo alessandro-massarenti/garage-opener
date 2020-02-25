@@ -2,53 +2,38 @@
 #define relay_board_size 4
 #define RELAY_ON LOW
 #define RELAY_OFF HIGH
+#define CHIAVE 97
 
 #include <LiquidCrystal_I2C.h>
 #include <UIPEthernet.h> // Used for Ethernet
 
 // **** ETHERNET SETTING ****
 byte mac[] = {0x00, 0xA2, 0xDA, 0x0D, 0x78, 0xEE};
-
-String readString;
-String string = "";
-
-int relay[relay_board_size] = {2, 3, 4, 5};
-
-LiquidCrystal_I2C lcd(0x27, 20, 4);
 EthernetServer server(80);
+//lcd
+int relay[relay_board_size] = {2, 3, 4, 5};
+LiquidCrystal_I2C lcd(0x27, 20, 4);
+
+//variable
+String readString;
+int prime = 0;
+int base = 0;
 
 void setup()
 {
 
-    //Reset relays
-    for (int i = 0; i < relay_board_size; i++)
-    {
-        pinMode(relay[i], OUTPUT);
-        digitalWrite(relay[i], RELAY_OFF);
-    }
+    reset_relay();
 
     Serial.begin(9600);
-    Serial.println("hello Wordld");
-    // start the Ethernet connection and the server:
-    Ethernet.begin(mac);
-    server.begin();
 
+    // start the Ethernet connection and the server:
     Ethernet.begin(mac);
     server.begin();
 
     lcd.init();
     lcd.backlight();
 
-    lcd.setCursor(0, 0);
-    lcd.print("IP: ");
-    lcd.print(Ethernet.localIP());
-    lcd.setCursor(0, 1);
-    lcd.print("Mask: ");
-    lcd.print(Ethernet.subnetMask());
-    lcd.setCursor(0, 2);
-    lcd.print("GwIP:");
-    lcd.print(Ethernet.gatewayIP());
-    lcd.setCursor(0, 3);
+    show_info();
 }
 
 void loop()
@@ -79,37 +64,17 @@ void loop()
                     //stopping client
                     client.stop();
 
-                    // control arduino pin
-                    if (readString.indexOf("?opengate") > -1)
+                    if (readString.indexOf("prime=") > -1 && readString.indexOf("base=") > -1)
                     {
-                        string = "opengate";
-                    }
-                    else if (readString.indexOf("?opendoor") > -1)
-                    {
-                        string = "opendoor";
-                    }
-                    else if (readString.indexOf("?open3") > -1)
-                    {
-                        pulse_relay(relay[2]);
-                    }
-                    else if (readString.indexOf("?open4") > -1)
-                    {
-                        pulse_relay(relay[3]);
-                    }
-                    else if (readString.indexOf("?key") > -1)
-                    {
-                        readString = readString.substring(readString.indexOf("?key")+5,readString.indexOf("end"));
-                        char caratteri[20];
-                        readString.toCharArray(caratteri,20);
-                        lcd.print(pad(XORENC(caratteri,"supercazzola"),20));
-                    }
+                        prime = readString.substring(readString.indexOf("prime=") + 5, readString.indexOf("&")).toInt();
+                        base = readString.substring(readString.indexOf("base=") + 5, readString.indexOf("&", readString.indexOf("base="))).toInt();
 
+                        Serial.println(prime);
+                        Serial.println(base);
+                        Serial.println(pubkey(prime, base));
+                    }
 
                     lcd.setCursor(0, 3);
-
-                    readString = pad(readString, 20);
-
-                    Serial.println(readString);
                     //clearing string for next read
                     readString = "";
                 }
@@ -152,3 +117,75 @@ void pulse_relay(int relay)
     delay(500);
     digitalWrite(relay, RELAY_OFF);
 }
+
+int pubkey(int prime, int base)
+{
+    return (CHIAVE * base) % prime;
+}
+
+int sharekey(int prime, int base, int chiave)
+{
+    return (chiave * CHIAVE) % prime;
+}
+
+void reset_relay()
+{
+    //Reset relays
+    for (int i = 0; i < relay_board_size; i++)
+    {
+        pinMode(relay[i], OUTPUT);
+        digitalWrite(relay[i], RELAY_OFF);
+    }
+    for (int i = 0; i < relay_board_size; i++)
+    {
+        pulse_relay(relay[i]);
+    }
+}
+
+void show_info()
+{
+    lcd.setCursor(0, 0);
+    lcd.print("IP: ");
+    lcd.print(Ethernet.localIP());
+    lcd.setCursor(0, 1);
+    lcd.print("Mask: ");
+    lcd.print(Ethernet.subnetMask());
+    lcd.setCursor(0, 2);
+    lcd.print("GwIP:");
+    lcd.print(Ethernet.gatewayIP());
+    lcd.setCursor(0, 3);
+}
+
+/*
+
+// control arduino pin
+                    if (readString.indexOf("?opengate") > -1)
+                    {
+                        pulse_relay(relay[0]);
+                    }
+                    else if (readString.indexOf("?opendoor") > -1)
+                    {
+                        pulse_relay(relay[1]);
+                    }
+                    else if (readString.indexOf("?open3") > -1)
+                    {
+                        pulse_relay(relay[2]);
+                    }
+                    else if (readString.indexOf("?open4") > -1)
+                    {
+                        pulse_relay(relay[3]);
+                    }
+
+                    else if (readString.indexOf("?key") > -1)
+                    {
+                        readString = readString.substring(readString.indexOf("?key") + 5, readString.indexOf("end"));
+                        char caratteri[20];
+                        readString.toCharArray(caratteri, 20);
+
+                        char *roba = XORENC(caratteri, "52546");
+
+                        lcd.print(pad(roba, 20));
+                        Serial.println(roba);
+                    }
+
+                    */
