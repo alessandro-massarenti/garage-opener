@@ -29,8 +29,6 @@ void blinkRelay(int pin)
   delay(250);
   digitalWrite(pin, RELAY_OFF);
   delay(50);
-  Serial.println("OK_" + (char)pin);
-  mqttClient.publish(OUT_TOPIC, "OK_" + (char)pin);
 }
 
 void callback(char *topic, byte *payload, unsigned int length)
@@ -44,14 +42,11 @@ void callback(char *topic, byte *payload, unsigned int length)
   }
   Serial.println();
 
-  if ((int)payload[0] - 48 >= 0 && (int)payload[0] - 48 < RELAY_BOARD_SIZE)
+  int data = (int)payload[0] - 48;
+
+  if (data >= 0 && data < RELAY_BOARD_SIZE)
   {
-    blinkRelay(relay[(int)payload[0] - 48]);
-  }
-  else
-  {
-    Serial.println((int)payload[0] - 48);
-    Serial.println("niente da fare bro");
+    blinkRelay(relay[data]);
   }
 }
 
