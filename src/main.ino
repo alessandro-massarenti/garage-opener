@@ -1,83 +1,110 @@
+#include <UIPEthernet.h>
+#include <PubSubClient.h>
+
 //Compiler instructions
-#define relay_board_size 4
+
 #define RELAY_ON LOW
 #define RELAY_OFF HIGH
 
-#include <UIPEthernet.h> // Used for Ethernet
-#include "functions.h"
+#define RELAY_BOARD_SIZE 4
 
-// **** ETHERNET SETTING ****
-byte mac[] = {0x90, 0xA2, 0xDA, 0x0D, 0x78, 0xEE};
+#define IN_TOPIC "/home/garage/g_controller/commands"
+#define OUT_TOPIC "/home/garage/g_controller/confirmations"
+#define ID_CONTROLLER "controller_1"
+#define USERNAME "username"
+#define PASSWORD "password"
 
-String readString;
+// Update these with values suitable for your network.
+byte mac[] = {0xDE, 0xED, 0xBA, 0xFE, 0xFE, 0xED};
+IPAddress server(192, 168, 51, 117);
 
-int relay[relay_board_size] = {2, 3, 4, 5};
-EthernetServer server(80);
+int relay[RELAY_BOARD_SIZE] = {2, 3, 4, 5};
+
+EthernetClient ethClient;
+PubSubClient mqttClient(ethClient);
+
+void blinkRelay(int pin)
+{
+  digitalWrite(pin, RELAY_ON);
+  delay(250);
+  digitalWrite(pin, RELAY_OFF);
+  delay(50);
+  Serial.println("OK_" + (char)pin);
+  mqttClient.publish(OUT_TOPIC, "OK_" + (char)pin);
+}
+
+void callback(char *topic, byte *payload, unsigned int length)
+{
+  Serial.print("Message arrived [");
+  Serial.print(topic);
+  Serial.print("] ");
+  for (int i = 0; i < length; i++)
+  {
+    Serial.print((char)payload[i]);
+  }
+  Serial.println();
+
+  if ((int)payload[0] - 48 >= 0 && (int)payload[0] - 48 < RELAY_BOARD_SIZE)
+  {
+    blinkRelay(relay[(int)payload[0] - 48]);
+  }
+  else
+  {
+    Serial.println((int)payload[0] - 48);
+    Serial.println("niente da fare bro");
+  }
+}
+
+void reconnect()
+{
+  // Loop until we're reconnected
+  while (!mqttClient.connected())
+  {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (mqttClient.connect(ID_CONTROLLER, USERNAME, PASSWORD))
+    {
+      Serial.println("connected");
+      // Once connected, publish an announcement...
+      mqttClient.publish(OUT_TOPIC, "online");
+      // ... and resubscribe
+      mqttClient.subscribe(IN_TOPIC);
+    }
+    else
+    {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
+    }
+  }
+}
 
 void setup()
 {
-    //Reset relays
-    for (int i = 0; i < relay_board_size; i++)
-    {
-        pinMode(relay[i], OUTPUT);
-        digitalWrite(relay[i], RELAY_OFF);
-    }
+  Serial.begin(9600);
 
-    // start the Ethernet connection and the server:
-    Ethernet.begin(mac, ip);
-    server.begin();
+  for (int i = 0; i < RELAY_BOARD_SIZE; i++)
+  {
+    pinMode(relay[i], OUTPUT);
+    digitalWrite(relay[i], RELAY_OFF);
+  }
+
+  mqttClient.setServer(server, 1883);
+  mqttClient.setCallback(callback);
+
+  Ethernet.begin(mac);
+  // Allow the hardware to sort itself out
+  delay(500);
 }
 
 void loop()
 {
-    // Create a client connection
-    EthernetClient client = server.available();
-    if (client)
-    {
-        while (client.connected())
-        {
-            if (client.available())
-            {
-                char c = client.read();
-
-                //read char by char HTTP request
-                if (readString.length() < 100)
-                {
-                    //store characters to string
-                    readString += c;
-                }
-
-                //if HTTP request has ended– 0x0D is Carriage Return \n ASCII
-                if (c == 0x0D)
-                {
-                    client.println("HTTP/1.1 200 OK"); //send new page
-                    delay(10);
-                    //stopping client
-                    client.stop();
-
-                    // control arduino pin
-                    if (readString.indexOf("?opengate") > -1)
-                    {
-                        pulse_relay(relay[0]);
-                    }
-                    else if (readString.indexOf("?opendoor") > -1)
-                    {
-                        pulse_relay(relay[1]);
-                    }
-                    //clearing string for next read
-                    else if (readString.indexOf("?open3") > -1)
-                    {
-                        pulse_relay(relay[2]);
-                    }
-                    //clearing string for next read
-                    else if (readString.indexOf("?open4") > -1)
-                    {
-                        pulse_relay(relay[3]);
-                    }
-                    //clearing string for next read
-                    readString = "";
-                }
-            }
-        }
-    }
+  if (!mqttClient.connected())
+  {
+    reconnect();
+  }
+  mqttClient.loop();
+  delay(20);
 }
