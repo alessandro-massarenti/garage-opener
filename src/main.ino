@@ -18,7 +18,7 @@
 byte mac[] = {0xDE, 0xED, 0xBA, 0xFE, 0xFE, 0xED};
 IPAddress server(192, 168, 51, 117);
 
-int relay[RELAY_BOARD_SIZE] = {2, 3, 4, 5};
+int relay[RELAY_BOARD_SIZE] = {3, 4, 5, 6};
 
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
